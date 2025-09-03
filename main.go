@@ -4,7 +4,6 @@ import (
 	"flag"
 	"fmt"
 	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"strconv"
@@ -28,7 +27,6 @@ const protocol = "ssl"
 
 func createMqttClient(clientConfig ClientConfig) mqtt.Client {
 	connectAddress := fmt.Sprintf("%s://%s:%d", protocol, clientConfig.Broker, port)
-	rand.Seed(time.Now().UnixNano())
 
 	fmt.Println("connect address: ", connectAddress)
 	opts := mqtt.NewClientOptions()
