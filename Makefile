@@ -16,3 +16,5 @@ docker-tag:
 docker-push:
 	docker push AWS_ACCOUNT_ID.dkr.ecr.eu-central-1.amazonaws.com/http-mqtt:latest
 
+docker-container:
+	docker run -p 3000:3000 http_server-mqtt

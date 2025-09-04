@@ -76,8 +76,16 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	th := handlers.MessageHandler{Client: client,
+	msgHandler := handlers.MessageHandler{Client: client,
 		Airbrake: Airbrake}
-	mux.Handle("/send", th)
+	mux.Handle("/send", msgHandler)
+
+	jsonHandler := handlers.JSONMessageHandler{Client: client,
+		Airbrake: Airbrake}
+	mux.Handle("/receive", jsonHandler)
+	mux.HandleFunc("POST /receive/", jsonHandler.ServeHTTP)
+
+	hHandler := handlers.HealthCheckHandler{}
+	mux.Handle("/health", hHandler)
 	http.ListenAndServe(":3000", mux)
 }
