@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log"
 	"net/http"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/airbrake/gobrake/v5"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/michalsz/mqtt_example/clients"
 	"github.com/michalsz/mqtt_example/messages"
 	"github.com/michalsz/mqtt_example/services"
 )
@@ -20,41 +20,8 @@ type MessageHandler struct {
 }
 
 const (
-	mqttTopic      = "new_topic"
-	mqttQoS        = 0 // Quality of Service: 0 means "at most once".
-	testMessageErr = "error"
-	msgQueryKey    = "msg"
+	msgQueryKey = "msg"
 )
-
-func sendMessage(ctx context.Context, message string, client mqtt.Client) error {
-	payload := fmt.Sprintf("message: %s!", message)
-	results := make(chan mqtt.Token, 1)
-
-	go func() {
-		token := client.Publish(mqttTopic, byte(mqttQoS), false, payload)
-
-		if message == "100" {
-			time.Sleep(3 * time.Second)
-		}
-		if token.Wait() && token.Error() != nil {
-			log.Printf("publish failed, topic: %s, payload: %s\n", mqttTopic, payload)
-		} else {
-			log.Printf("publish success, topic: %s, payload: %s\n", mqttTopic, payload)
-		}
-		results <- token
-	}()
-
-	if message == testMessageErr {
-		return errors.New("error Test from Airbrake")
-	}
-
-	select {
-	case <-results:
-		return nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
-}
 
 func (th MessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	msg := r.URL.Query().Get(msgQueryKey)
@@ -62,7 +29,7 @@ func (th MessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	err := sendMessage(ctx, msg, th.Client)
+	err := services.SendMessage(ctx, msg, th.Client)
 	if err != nil {
 		th.Airbrake.Notify(err.Error(), nil)
 	}
@@ -85,18 +52,30 @@ func (th JSONMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	isValid, err := services.ValidateMsg(dMsg)
 	if isValid {
-		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
-		err = sendMessage(ctx, dMsg.Value, th.Client)
+		err = services.SendMessage(ctx, dMsg.Value, th.Client)
 		if err != nil {
 			th.Airbrake.Notify(err.Error(), nil)
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		}
+
+		c := clients.NewAirTableClient()
+		addedRecords, err := c.SaveDeviceDatadMsg(dMsg)
+
+		if err != nil {
+			th.Airbrake.Notify(err, nil)
+			log.Println("error on save records")
+		}
+
+		logMsg := fmt.Sprintf("Temp from device: %s Added %d records \n", dMsg.Value, len(addedRecords.Records))
+
+		log.Println(logMsg)
+		w.Write([]byte(logMsg))
+
 	} else {
 		th.Airbrake.Notify(err, nil)
 		http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 	}
-
-	w.Write([]byte("Temp from device: " + dMsg.Value))
 }

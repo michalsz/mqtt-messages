@@ -12,6 +12,7 @@ import (
 	"github.com/airbrake/gobrake/v5"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/joho/godotenv"
+	"github.com/michalsz/mqtt_example/clients"
 	"github.com/michalsz/mqtt_example/handlers"
 )
 
@@ -21,6 +22,7 @@ var username string
 var topic string
 var clientID string
 var Airbrake *gobrake.Notifier
+var AirTblCLient *clients.AirTableCLient
 
 const port = 8883
 const protocol = "ssl"
@@ -59,6 +61,8 @@ func init() {
 		ProjectKey:  projectKey,
 		Environment: environment,
 	})
+
+	AirTblCLient = clients.NewAirTableClient()
 }
 
 func estamblishTopic() {
@@ -81,7 +85,8 @@ func main() {
 	mux.Handle("/send", msgHandler)
 
 	jsonHandler := handlers.JSONMessageHandler{Client: client,
-		Airbrake: Airbrake}
+		Airbrake: Airbrake,
+	}
 	mux.Handle("/receive", jsonHandler)
 	mux.HandleFunc("POST /receive/", jsonHandler.ServeHTTP)
 

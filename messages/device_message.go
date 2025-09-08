@@ -9,6 +9,8 @@ type DeviceMessage struct {
 	DeviceId  string `validate:"required"`
 	Parameter string `validate:"is_temp"`
 	Value     string
+	Pressure  float32
+	Name      string
 }
 
 func DecodeJSON(requestBody io.Reader) (*DeviceMessage, error) {
