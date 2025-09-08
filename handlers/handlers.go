@@ -1,17 +1,17 @@
 package handlers
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/airbrake/gobrake/v5"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
-	"github.com/go-playground/validator/v10"
+	"github.com/michalsz/mqtt_example/messages"
+	"github.com/michalsz/mqtt_example/services"
 )
 
 type MessageHandler struct {
@@ -26,24 +26,43 @@ const (
 	msgQueryKey    = "msg"
 )
 
-func sendMessage(message string, client mqtt.Client) error {
+func sendMessage(ctx context.Context, message string, client mqtt.Client) error {
 	payload := fmt.Sprintf("message: %s!", message)
-	if token := client.Publish(mqttTopic, byte(mqttQoS), false, payload); token.Wait() && token.Error() != nil {
-		log.Printf("publish failed, topic: %s, payload: %s\n", mqttTopic, payload)
-	} else {
-		log.Printf("publish success, topic: %s, payload: %s\n", mqttTopic, payload)
-	}
+	results := make(chan mqtt.Token, 1)
+
+	go func() {
+		token := client.Publish(mqttTopic, byte(mqttQoS), false, payload)
+
+		if message == "100" {
+			time.Sleep(3 * time.Second)
+		}
+		if token.Wait() && token.Error() != nil {
+			log.Printf("publish failed, topic: %s, payload: %s\n", mqttTopic, payload)
+		} else {
+			log.Printf("publish success, topic: %s, payload: %s\n", mqttTopic, payload)
+		}
+		results <- token
+	}()
 
 	if message == testMessageErr {
 		return errors.New("error Test from Airbrake")
 	}
 
-	return nil
+	select {
+	case <-results:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 func (th MessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	msg := r.URL.Query().Get(msgQueryKey)
-	err := sendMessage(msg, th.Client)
+
+	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
+	defer cancel()
+
+	err := sendMessage(ctx, msg, th.Client)
 	if err != nil {
 		th.Airbrake.Notify(err.Error(), nil)
 	}
@@ -56,23 +75,20 @@ type JSONMessageHandler struct {
 	Airbrake *gobrake.Notifier
 }
 
-type DeviceMessage struct {
-	DeviceId  string `validate:"required"`
-	Parameter string `validate:"is_temp"`
-	Value     string
-}
-
 func (th JSONMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	dMsg, err := decodeJSON(r.Body)
+	dMsg, err := messages.DecodeJSON(r.Body)
 
 	if err != nil {
 		th.Airbrake.Notify(err.Error(), nil)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 	}
 
-	isValid, err := validateMsg(dMsg)
+	isValid, err := services.ValidateMsg(dMsg)
 	if isValid {
-		err = sendMessage(dMsg.Value, th.Client)
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		err = sendMessage(ctx, dMsg.Value, th.Client)
 		if err != nil {
 			th.Airbrake.Notify(err.Error(), nil)
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
@@ -83,32 +99,4 @@ func (th JSONMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Write([]byte("Temp from device: " + dMsg.Value))
-}
-
-func decodeJSON(requestBody io.Reader) (*DeviceMessage, error) {
-	dMsg := DeviceMessage{}
-
-	err := json.NewDecoder(requestBody).Decode(&dMsg)
-	if err != nil {
-		return nil, err
-	}
-
-	return &dMsg, nil
-}
-
-func validateMsg(dMsg *DeviceMessage) (bool, error) {
-	validate := validator.New(validator.WithRequiredStructEnabled())
-	validate.RegisterValidation("is_temp", tempValidator)
-
-	err := validate.Struct(dMsg)
-	if err != nil {
-		return false, err
-	} else {
-		return true, nil
-	}
-}
-
-func tempValidator(fl validator.FieldLevel) bool {
-	tmp := fl.Field().String()
-	return tmp == "temp"
 }
