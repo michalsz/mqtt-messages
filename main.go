@@ -2,54 +2,25 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"strconv"
-	"time"
 
 	"github.com/airbrake/gobrake/v5"
 	"github.com/aws/aws-lambda-go/lambda"
 	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
 	"github.com/davecgh/go-spew/spew"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/joho/godotenv"
 	"github.com/michalsz/mqtt_example/clients"
 	"github.com/michalsz/mqtt_example/handlers"
 	"github.com/michalsz/mqtt_example/services"
 )
 
-var broker string
-var password string
-var username string
 var topic string
-var clientID string
 var Environment string
 var Airbrake *gobrake.Notifier
 var AirTblCLient *clients.AirTableCLient
-
-const port = 8883
-const protocol = "ssl"
-
-func createMqttClient(clientConfig ClientConfig) mqtt.Client {
-	connectAddress := fmt.Sprintf("%s://%s:%d", protocol, clientConfig.Broker, port)
-
-	fmt.Println("connect address: ", connectAddress)
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(connectAddress)
-	opts.SetUsername(clientConfig.Username)
-	opts.SetPassword(clientConfig.Password)
-	opts.SetClientID(clientConfig.ClientID)
-	opts.SetKeepAlive(time.Second * 60)
-	client := mqtt.NewClient(opts)
-	token := client.Connect()
-	// if connection failed, exit
-	if token.WaitTimeout(3*time.Second) && token.Error() != nil {
-		log.Fatal(token.Error())
-	}
-	return client
-}
 
 func init() {
 	err := godotenv.Load()
@@ -79,8 +50,8 @@ func main() {
 	defer Airbrake.Close()
 	defer Airbrake.NotifyOnPanic()
 
-	clientConfig := NewClientConfig()
-	client := createMqttClient(clientConfig)
+	clientConfig := clients.NewClientConfig()
+	client := clients.CreateMqttClient(clientConfig)
 	estamblishTopic()
 
 	mux := http.NewServeMux()

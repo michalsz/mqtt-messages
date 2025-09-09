@@ -1,4 +1,4 @@
-package main
+package clients
 
 import "os"
 
@@ -10,10 +10,10 @@ type ClientConfig struct {
 }
 
 func NewClientConfig() ClientConfig {
-	broker = os.Getenv("BROKER_URL")
-	password = os.Getenv("PASSWORD")
-	username = os.Getenv("USERNAME")
-	clientID = os.Getenv("CLIENT_ID")
+	broker := os.Getenv("BROKER_URL")
+	password := os.Getenv("PASSWORD")
+	username := os.Getenv("USERNAME")
+	clientID := os.Getenv("CLIENT_ID")
 
 	cConfig := ClientConfig{Broker: broker,
 		Password: password,
