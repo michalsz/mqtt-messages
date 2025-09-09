@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/airbrake/gobrake/v5"
-	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/michalsz/mqtt_example/clients"
 	"github.com/michalsz/mqtt_example/messages"
 	"github.com/michalsz/mqtt_example/services"
 )
 
 type MessageHandler struct {
-	Client   mqtt.Client
 	Airbrake *gobrake.Notifier
+	Service  services.Sender
 }
 
 const (
@@ -29,7 +28,7 @@ func (th MessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 
-	err := services.SendMessage(ctx, msg, th.Client)
+	err := th.Service.SendMessage(ctx, msg)
 	if err != nil {
 		th.Airbrake.Notify(err.Error(), nil)
 	}
@@ -38,8 +37,9 @@ func (th MessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 type JSONMessageHandler struct {
-	Client   mqtt.Client
-	Airbrake *gobrake.Notifier
+	Airbrake      *gobrake.Notifier
+	Service       services.Sender
+	PersistClient clients.PersisterClient
 }
 
 func (th JSONMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
@@ -55,14 +55,13 @@ func (th JSONMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 		defer cancel()
 
-		err = services.SendMessage(ctx, dMsg.Value, th.Client)
+		err := th.Service.SendMessage(ctx, dMsg.Value)
 		if err != nil {
 			th.Airbrake.Notify(err.Error(), nil)
 			http.Error(w, err.Error(), http.StatusUnprocessableEntity)
 		}
 
-		c := clients.NewAirTableClient()
-		addedRecords, err := c.SaveDeviceDatadMsg(dMsg)
+		addedRecords, err := th.PersistClient.SaveDeviceDatadMsg(dMsg)
 
 		if err != nil {
 			th.Airbrake.Notify(err, nil)
@@ -71,7 +70,6 @@ func (th JSONMessageHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 		logMsg := fmt.Sprintf("Temp from device: %s Added %d records \n", dMsg.Value, len(addedRecords.Records))
 
-		log.Println(logMsg)
 		w.Write([]byte(logMsg))
 
 	} else {

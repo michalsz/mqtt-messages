@@ -16,12 +16,20 @@ const (
 	testMessageErr = "error"
 )
 
-func SendMessage(ctx context.Context, message string, client mqtt.Client) error {
+type Sender interface {
+	SendMessage(ctx context.Context, message string) error
+}
+
+type QtMessageSender struct {
+	Client mqtt.Client
+}
+
+func (s QtMessageSender) SendMessage(ctx context.Context, message string) error {
 	payload := fmt.Sprintf("message: %s!", message)
 	results := make(chan mqtt.Token, 1)
 
 	go func() {
-		token := client.Publish(mqttTopic, byte(mqttQoS), false, payload)
+		token := s.Client.Publish(mqttTopic, byte(mqttQoS), false, payload)
 
 		if message == "100" {
 			time.Sleep(3 * time.Second)

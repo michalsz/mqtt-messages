@@ -4,7 +4,10 @@ go 1.25.0
 
 require (
 	github.com/airbrake/gobrake/v5 v5.6.2 // indirect
+	github.com/aws/aws-lambda-go v1.49.0 // indirect
+	github.com/awslabs/aws-lambda-go-api-proxy v0.16.2 // indirect
 	github.com/caio/go-tdigest/v4 v4.0.1 // indirect
+	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.5.0 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/go-playground/locales v0.14.1 // indirect

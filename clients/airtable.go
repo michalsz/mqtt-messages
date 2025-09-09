@@ -9,6 +9,10 @@ import (
 	"github.com/michalsz/mqtt_example/messages"
 )
 
+type PersisterClient interface {
+	SaveDeviceDatadMsg(dMsg *messages.DeviceMessage) (*airtable.Records, error)
+}
+
 type AirTableCLient struct {
 	Client   *airtable.Client
 	dbName   string
@@ -49,7 +53,7 @@ func NewAirTableClient() *AirTableCLient {
 }
 
 func prepareDeviceDataRecord(dMsg messages.DeviceMessage) map[string]any {
-	tempVal, _ := strconv.Atoi(dMsg.Value)
+	tempVal, _ := strconv.ParseFloat(dMsg.Value, 64)
 
 	deviceData := make(map[string]any)
 	deviceData["Name"] = dMsg.Name

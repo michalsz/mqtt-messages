@@ -10,10 +10,14 @@ import (
 	"time"
 
 	"github.com/airbrake/gobrake/v5"
+	"github.com/aws/aws-lambda-go/lambda"
+	"github.com/awslabs/aws-lambda-go-api-proxy/httpadapter"
+	"github.com/davecgh/go-spew/spew"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/joho/godotenv"
 	"github.com/michalsz/mqtt_example/clients"
 	"github.com/michalsz/mqtt_example/handlers"
+	"github.com/michalsz/mqtt_example/services"
 )
 
 var broker string
@@ -21,6 +25,7 @@ var password string
 var username string
 var topic string
 var clientID string
+var Environment string
 var Airbrake *gobrake.Notifier
 var AirTblCLient *clients.AirTableCLient
 
@@ -54,15 +59,15 @@ func init() {
 
 	projectID, _ := strconv.ParseInt(os.Getenv("AIRBRAKE_PROJECT_ID"), 10, 64)
 	projectKey := os.Getenv("AIRBRAKE_PROJECT_KEY")
-	environment := os.Getenv("ENVIRONMENT")
+	Environment := os.Getenv("ENVIRONMENT")
+
+	spew.Dump(Environment)
 
 	Airbrake = gobrake.NewNotifierWithOptions(&gobrake.NotifierOptions{
 		ProjectId:   projectID,
 		ProjectKey:  projectKey,
-		Environment: environment,
+		Environment: Environment,
 	})
-
-	AirTblCLient = clients.NewAirTableClient()
 }
 
 func estamblishTopic() {
@@ -80,17 +85,32 @@ func main() {
 
 	mux := http.NewServeMux()
 
-	msgHandler := handlers.MessageHandler{Client: client,
-		Airbrake: Airbrake}
+	service := services.QtMessageSender{Client: client}
+
+	msgHandler := handlers.MessageHandler{
+		Airbrake: Airbrake,
+		Service:  service,
+	}
 	mux.Handle("/send", msgHandler)
 
-	jsonHandler := handlers.JSONMessageHandler{Client: client,
-		Airbrake: Airbrake,
+	c := clients.NewAirTableClient()
+
+	jsonHandler := handlers.JSONMessageHandler{
+		Airbrake:      Airbrake,
+		Service:       service,
+		PersistClient: c,
 	}
 	mux.Handle("/receive", jsonHandler)
 	mux.HandleFunc("POST /receive/", jsonHandler.ServeHTTP)
 
 	hHandler := handlers.HealthCheckHandler{}
 	mux.Handle("/health", hHandler)
-	http.ListenAndServe(":3000", mux)
+
+	Environment := os.Getenv("ENVIRONMENT")
+	spew.Dump(Environment)
+	if Environment == "development" {
+		http.ListenAndServe(":3000", mux)
+	} else {
+		lambda.Start(httpadapter.New(http.DefaultServeMux).ProxyWithContext)
+	}
 }
