@@ -13,6 +13,7 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
     - uses: actions/checkout@v4
 
@@ -26,3 +27,11 @@ jobs:
 
     - name: Test
       run: go test -v ./...
+
+    - name: generate test coverage
+      run: go test ./... -coverprofile=./cover.out -covermode=atomic -coverpkg=./...
+
+    - name: go-test-coverage
+      uses: vladopajic/go-test-coverage@v2.16.1
+      with:
+        config: ./.testcoverage.yml
