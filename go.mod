@@ -1,6 +1,6 @@
 module github.com/michalsz/mqtt_example
 
-go 1.25.0
+go 1.23
 
 require (
 	github.com/airbrake/gobrake/v5 v5.6.2 // indirect
